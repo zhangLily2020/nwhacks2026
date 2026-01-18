@@ -1,1 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment (Very Important!)
+venv/
+env/
+.env
+
+# VS Code settings (optional, but good for teams)
+.vscode/
+
+# macOS system files
+.DS_Store
 /img/*
