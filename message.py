@@ -2,9 +2,6 @@ import pyautogui
 import time
 import random
 
-# Give yourself 5 seconds to switch over to the Instagram tab
-print("Switch to your Instagram Live tab now...")
-time.sleep(5)
 
 def post_comment_with_mouse(message):
     # 1. Move to the coordinates of the comment box
@@ -22,6 +19,3 @@ def post_comment_with_mouse(message):
     
     # 3. Press Enter
     pyautogui.press('enter')
-
-# Run it
-post_comment_with_mouse("Hit")
