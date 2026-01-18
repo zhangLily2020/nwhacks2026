@@ -22,6 +22,8 @@ def get_card_deltas(current, previous):
     return result
 
 while(True):
+    time.sleep(10)
+
     path_to_image = capture_and_save_to_out("curr_board.jpeg")
     try:
         current_player_hand, current_dealer_hand = cards_viewing.analyze_image_file(path_to_image)
@@ -39,10 +41,8 @@ while(True):
 
     if player_delta:
         action = agent.get_move(current_player_hand, current_dealer_hand)
-        post_comment_with_mouse("action: " + action)    
+        post_comment_with_mouse(action.lower())    
         print(f"{action}")
 
     prev_player_hand = current_player_hand
     prev_dealer_hand = current_dealer_hand
-
-    time.sleep(10)
