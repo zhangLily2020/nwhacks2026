@@ -17,6 +17,11 @@ def capture_and_save_to_out(filename):
     # 4. Take the screenshot
     screenshot = pyautogui.screenshot()
 
+    # If saving as JPEG, convert from RGBA to RGB because JPEG doesn't support alpha
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in (".jpg", ".jpeg"):
+        screenshot = screenshot.convert("RGB")
+
     # 5. Save it
     screenshot.save(full_path)
     print(f"Success! Saved to: {full_path}")
