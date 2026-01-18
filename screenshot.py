@@ -44,9 +44,3 @@ def get_next_filename(base_dir="img", prefix="screenshot", ext=".jpeg", pad=3):
             except Exception:
                 continue
     return f"{prefix}_{max_n+1:0{pad}d}{ext}"
-
-# Example Usage:
-while True:
-    time.sleep(10)
-    filename = get_next_filename("img", prefix="screenshot", ext=".jpeg")
-    path_to_image = capture_and_save_to_out(filename)

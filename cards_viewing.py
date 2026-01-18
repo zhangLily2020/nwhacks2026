@@ -8,8 +8,50 @@ from google.genai import types
 
 # Use folder relative to this script
 img_dir = os.path.join(os.path.dirname(__file__), "img")
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 _EXTS = {"jpg", "jpeg", "png", "webp"}
+
+
+def _load_env_file():
+    """Lightweight loader for a .env file located in the project root.
+
+    This sets environment variables that are not already present in `os.environ`.
+    """
+    # Look for a .env in the script directory first, then the parent directory
+    candidates = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), ".env")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, ".env")),
+    ]
+    root_env = None
+    for c in candidates:
+        if os.path.exists(c):
+            root_env = c
+            break
+    if not root_env:
+        return
+    try:
+        with open(root_env, "r") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        # best-effort only; don't crash the import
+        return
+
+
+_load_env_file()
+_api_key = os.environ.get("GEMINI_API_KEY")
+if _api_key:
+    client = genai.Client(api_key=_api_key)
+else:
+    client = None
 
 # Keep the last-seen card lists for player and dealer
 prev_player = []
@@ -48,124 +90,68 @@ def extract_json(text: str):
             except Exception:
                 continue
     raise ValueError("No valid JSON found in response")
+def analyze_image_bytes(image_bytes: bytes, mime: str):
+    """Analyze image bytes with the Gemini model and return (player_cards, dealer_cards).
 
-try:
-    while True:
-        # get image files in alphabetical order
-        try:
-            files = sorted(
-                f for f in os.listdir(img_dir)
-                if os.path.isfile(os.path.join(img_dir, f)) and f.rsplit(".", 1)[-1].lower() in _EXTS
-            )
-        except FileNotFoundError:
-            # img folder may not exist yet; wait and retry
-            time.sleep(1)
-            continue
+    Raises ValueError on parsing/validation errors or other exceptions from the client.
+    """
+    print("Analyzing image bytes")
+    if client is None:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not set. Set the environment variable or add a .env file with GEMINI_API_KEY."
+        )
 
-        if not files:
-            # nothing to process; wait and retry
-            time.sleep(1)
-            continue
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=[
+            types.Part.from_bytes(data=image_bytes, mime_type=mime),
+            PROMPT,
+        ],
+    )
 
-        for fname in files:
-            path = os.path.join(img_dir, fname)
-            if not os.path.exists(path):
-                continue
+    raw = response.text
+    print(raw)
+    parsed = extract_json(raw)
 
-            ext = fname.rsplit(".", 1)[-1].lower()
-            if ext in ("jpg", "jpeg"):
-                mime = "image/jpeg"
-            elif ext == "png":
-                mime = "image/png"
-            elif ext == "webp":
-                mime = "image/webp"
-            else:
-                continue
+    if not isinstance(parsed, dict) or "player" not in parsed or "dealer" not in parsed:
+        raise ValueError(f"parsed JSON missing 'player' or 'dealer' keys: {parsed}")
 
-            try:
-                with open(path, "rb") as f:
-                    image_bytes = f.read()
+    player_obj = parsed.get("player", {})
+    dealer_obj = parsed.get("dealer", {})
 
-                response = client.models.generate_content(
-                    model="gemini-3-flash-preview",
-                    contents=[
-                        types.Part.from_bytes(data=image_bytes, mime_type=mime),
-                        PROMPT,
-                    ],
-                )
+    player_cards = player_obj.get("cards", [])
+    dealer_cards = dealer_obj.get("cards", [])
 
-                raw = response.text
-                try:
-                    parsed = extract_json(raw)
-                except Exception as e:
-                    print(f"{fname}: failed to parse JSON from model response: {e}")
-                    # Keep the file for retry later
-                    time.sleep(1)
-                    continue
+    if not isinstance(player_cards, list) or not isinstance(dealer_cards, list):
+        raise ValueError(f"'cards' for player or dealer is not a list: {parsed}")
 
-                # Validate structure
-                if not isinstance(parsed, dict) or "player" not in parsed or "dealer" not in parsed:
-                    print(f"{fname}: parsed JSON missing 'player' or 'dealer' keys: {parsed}")
-                    time.sleep(1)
-                    continue
+    normalized_player = [str(c).strip() for c in player_cards]
+    normalized_dealer = [str(c).strip() for c in dealer_cards]
 
-                # Extract card lists for each side
-                player_obj = parsed.get("player", {})
-                dealer_obj = parsed.get("dealer", {})
+    return normalized_player, normalized_dealer
 
-                player_cards = player_obj.get("cards", [])
-                dealer_cards = dealer_obj.get("cards", [])
 
-                if not isinstance(player_cards, list) or not isinstance(dealer_cards, list):
-                    print(f"{fname}: 'cards' for player or dealer is not a list: {parsed}")
-                    time.sleep(1)
-                    continue
+def analyze_image_file(path: str):
+    print("Reached")
+    """Read an image file from `path` and return (player_cards, dealer_cards)."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
 
-                # Normalize ranks to strings
-                normalized_player = [str(c).strip() for c in player_cards]
-                normalized_dealer = [str(c).strip() for c in dealer_cards]
+    ext = path.rsplit(".", 1)[-1].lower()
+    if ext in ("jpg", "jpeg"):
+        mime = "image/jpeg"
+    elif ext == "png":
+        mime = "image/png"
+    elif ext == "webp":
+        mime = "image/webp"
+    else:
+        raise ValueError(f"Unsupported image extension: {ext}")
 
-                # Compute newly observed cards (multiset difference)
-                new_player_diff = Counter(normalized_player) - Counter(prev_player)
-                new_dealer_diff = Counter(normalized_dealer) - Counter(prev_dealer)
+    with open(path, "rb") as f:
+        image_bytes = f.read()
 
-                # Combine diffs and update single total counter
-                combined_new = new_player_diff + new_dealer_diff
-                if combined_new:
-                    total_counter.update(combined_new)
+    print("Anazlyzing")
+    return analyze_image_bytes(image_bytes, mime)
 
-                # Report state change or no change
-                if normalized_player != prev_player or normalized_dealer != prev_dealer:
-                    print(
-                        f"{fname}: state changed -> player count={len(normalized_player)}, "
-                        f"player_cards={normalized_player}; dealer count={len(normalized_dealer)}, "
-                        f"dealer_cards={normalized_dealer}"
-                    )
-                else:
-                    print(
-                        f"{fname}: no state change (player count={len(normalized_player)}, "
-                        f"player_cards={normalized_player}; dealer count={len(normalized_dealer)}, "
-                        f"dealer_cards={normalized_dealer})"
-                    )
 
-                # Print cumulative total counter
-                print(f"total_counter={dict(total_counter)}")
-
-                # Update previous states
-                prev_player = normalized_player
-                prev_dealer = normalized_dealer
-
-                # on successful parse and counting, delete the image
-                try:
-                    os.remove(path)
-                except OSError as e:
-                    print(f"Failed to delete {fname}: {e}")
-
-            except Exception as e:
-                # log and keep the file for retry later
-                print(f"Error processing {fname}: {e}")
-                # small backoff before next attempt
-                time.sleep(1)
-
-except KeyboardInterrupt:
-    print("Interrupted, exiting.")
+__all__ = ["analyze_image_file", "analyze_image_bytes", "extract_json"]

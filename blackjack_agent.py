@@ -114,33 +114,3 @@ class BlackjackAgent:
                 return 'DOUBLE' if dealer_val in [3,4,5,6] and len(player_cards) == 2 else 'HIT'
             
             return 'HIT'
-
-
-# 1. Initialize the Agent once
-ai = BlackjackAgent(num_decks=6)
-
-# ... Round Starts ...
-# Assume you see these cards on the table
-player_hand = ['10', '6']  # 16
-dealer_hand = ['7']         # 7 showing
-
-# 2. IMPORTANT: Update the count with what you see
-ai.update_count(player_hand)
-ai.update_count(dealer_hand)
-
-# 3. Ask for a move
-move = ai.get_move(player_hand, dealer_hand)
-print(f"Decision: {move}") 
-# Output: HIT (Because 16 vs 7 is a Hit)
-
-# ... You hit and get a 5 ...
-new_card = '5'
-player_hand.append(new_card)
-
-# 4. Update count again for the new card
-ai.update_count([new_card])
-
-# 5. Ask for move again
-move = ai.get_move(player_hand, dealer_hand)
-print(f"Decision: {move}")
-# Output: STAND (You now have 21)
