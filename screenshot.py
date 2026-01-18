@@ -3,13 +3,13 @@ import os
 import time
 
 def capture_and_save_to_out(filename):
-    # 1. Define the 'out' directory relative to the script
+    # 1. Define the 'img' directory relative to the script
     base_dir = "img"
     
-    # 2. Create the full path (e.g., "out/my_screenshot.png")
+    # 2. Create the full path (e.g., "out/screenshot.jpeg")
     full_path = os.path.join(base_dir, filename)
     
-    # 3. Ensure the 'out' directory exists
+    # 3. Ensure the 'img' directory exists
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
         print(f"Created directory: {base_dir}")
@@ -26,4 +26,4 @@ def capture_and_save_to_out(filename):
 # Example Usage:
 while(True):
     time.sleep(10)
-    path_to_image = capture_and_save_to_out("instagram_capture.jpeg")
+    path_to_image = capture_and_save_to_out("screenshot.jpeg")
